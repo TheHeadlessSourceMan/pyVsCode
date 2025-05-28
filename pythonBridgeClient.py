@@ -521,7 +521,8 @@ class VsCode:
 
     def executeApi(self,
         functionName:str,
-        *args:typing.Any
+        *args:typing.Any,
+        **kwargs:typing.Any
         )->typing.Dict[str,typing.Any]:
         """
         Execute a vscode api.
@@ -533,7 +534,8 @@ class VsCode:
         """
         jsonStr:str=json.dumps({
             "command":functionName,
-            "args":args
+            "args":args,
+            "kwargs":kwargs
             })
         self.websocket.send(jsonStr) # type: ignore
         jsonStr=self.websocket.recv() # type: ignore

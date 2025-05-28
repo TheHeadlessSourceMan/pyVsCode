@@ -1,5 +1,8 @@
 """
 Control instance of Visual Studio Code
+
+See also:
+https://code.visualstudio.com/api/references/vscode-api
 """
 import typing
 import os
@@ -13,6 +16,9 @@ from .pythonBridgeClient import VsCode,NoVscodeInstanceException
 class VsCodeProjectEditor(Ide):
     """
     Control instance of Visual Studio Code
+    
+    See also:
+    https://code.visualstudio.com/api/references/vscode-api
     """
     def __init__(self,project:typing.Union[None,str,Path]):
         self._bridge:typing.Optional[VsCode]=None
@@ -49,15 +55,16 @@ class VsCodeProjectEditor(Ide):
             self._bridge=VsCode(project)
         else:
             # TODO: untested, need to look up the api for this
-            result=self._bridge.executeApi('open_workspace',project)
+            result=self.bridge.executeApi('open_workspace',project)
             print(result)
 
     def openCodeFile(self,location:FileLocationCompatible)->None:
         """
         Open a code file in this workspace
+
+        UNTESTED
         """
-        # TODO: untested, need to look up the api for this
-        result=self.bridge.executeApi('open',location)
+        result=self.bridge.executeApi('openTextDocument',str(location))
         print(result)
 
     def read(self,location:FileLocationCompatible)->str:
@@ -81,17 +88,19 @@ class VsCodeProjectEditor(Ide):
     def getFiles(self)->typing.Iterable[str]:
         """
         Get the names of all files in the project
+
+        UNTESTED
         """
-        # TODO: untested, need to look up the api for this
-        result=self._bridge.executeApi('list_files')
+        result=self._bridge.eval('textDocuments')
         print(result)
 
     def saveAll(self)->None:
         """
         Save all unsaved files
+
+        UNTESTED
         """
-        # TODO: untested, need to look up the api for this
-        result=self._bridge.executeApi('save_all')
+        result=self.bridge.executeApi('saveAll',includeUntitled='false')
         print(result)
 
     def close(self,autosave:bool=True)->None:
@@ -101,14 +110,16 @@ class VsCodeProjectEditor(Ide):
         if autosave:
             self.saveAll()
         # TODO: untested, need to look up the api for this
-        result=self._bridge.executeApi('close')
+        result=self.bridge.executeApi('close')
         print(result)
 
     def getDebuggedProcessPid(self)->int:
         """
         The pid of the process under test
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def attach(self,
         filename:typing.Optional[str]=None,
@@ -122,57 +133,101 @@ class VsCodeProjectEditor(Ide):
         ambiguious.
 
         :startIfNotRunning: start the filename if there is not one running
+
+        UNTESTED
         """
-        raise NotImplementedError()
+        # Look through the debug configurations to find a name like "attach"
+        # Instead of this api call, it may be better to simply query the
+        # .vscode/launch.json file
+        debugConfigurationProvider=self.bridge.executeApi(
+            'debug.currentDebugConfigurationProvider')
+        name=''
+        for debugConfiguration in debugConfigurationProvider['provideDebufConfigurations']():
+            name=debugConfiguration.name
+            if name.lower().find('attach'):
+                break
+        self.start(name)
+
+    @property
+    def activeDebugSession(self):
+        """
+        If debugger is running, return the session.
+        Otherwise, raises exception.
+        
+        UNTESTED
+        """
+        result=self.bridge.executeApi('debug.activeDebugSession')
+        if not result:
+            raise IndexError()
+        return result
 
     def detatch(self)->None:
         """
         Detatch the debugger from a running program.
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.activeDebugSession
+        print(result)
 
-    def start(self)->None:
+    def start(self,sessionName:str='')->None:
         """
         start the debugger
+
+        UNTESTED
         """
-        raise NotImplementedError()
+        result=self.bridge.executeApi('debug.startDebugging',
+            folder='.',nameOrConfiguration=sessionName)
+        print(result)
 
     def stop(self)->None:
         """
         stop the program
+
+        UNTESTED
         """
-        raise NotImplementedError()
+        result=self.bridge.executeApi('debug.stopDebugging')
+        print(result)
 
     def waitExit(self)->int:
         """
         wait for the application to exit
         and return the exit code
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def pause(self)->None:
         """
         pause the debugger
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def resume(self)->None:
         """
         resume the debugger
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def getIsPaused(self)->bool:
         """
         get whether the debugger is paused
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def getDebuggerLocation(self)->FileLocation:
         """
         get the current paused location
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def getCallStack(self)->StackFrame:
         """
@@ -180,13 +235,17 @@ class VsCodeProjectEditor(Ide):
 
         Returns the topmost stack frame
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def getBreakpoints(self)->typing.Generator[Breakpoint,None,None]:
         """
         get all breakpoints
         """
-        raise NotImplementedError()
+        # TODO: untested, need to look up the api for this
+        result=self.bridge.executeApi('list_files')
+        print(result)
 
     def addBreakpoint(self,
         location:typing.Union[str,FileLocation],
@@ -195,15 +254,21 @@ class VsCodeProjectEditor(Ide):
         callback:typing.Optional[BreakpointCallback]=None)->None:
         """
         Add a new breakpoint
+
+        UNTESTED
         """
-        raise NotImplementedError()
+        result=self.bridge.executeApi('debug.addBreakpoints',[location])
+        print(result)
 
     def removeBreakpoint(self,
         breakpoint:Breakpoint)->None: # pylint: disable=redefined-builtin
         """
         Remove a breakpoint
+
+        UNTESTED
         """
-        raise NotImplementedError()
+        result=self.bridge.executeApi('debug.removeBreakpoints',[breakpoint.name])
+        print(result)
 
     def getWatchpoints(self)->typing.Generator[Watchpoint,None,None]:
         """
