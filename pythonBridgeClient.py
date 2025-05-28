@@ -11,6 +11,7 @@ See:
     https://code.visualstudio.com/api/references/vscode-api
 """
 import typing
+import os
 import json
 from pathlib import Path
 import psutil
@@ -19,6 +20,16 @@ import websocket # type: ignore
 
 JsonLike=typing.Dict[str,typing.Any]
 
+class NoVscodeInstanceException(Exception):
+    """
+    Exception for when we want to do something on a vscode instance
+    but there is not one attached.
+    """
+    def __init__(self,instanceName:typing.Optional[str]=None):
+        msg='No VsCode instance connected'
+        if instanceName is not None and instanceName:
+            msg=f'No VsCode instance named "{instanceName}" connected'
+        Exception.__init__(self,msg)
 
 class Remote:
     """
@@ -208,28 +219,64 @@ class VsCode:
     _commands:typing.Dict[str,CommandCaller]={}
 
     def __init__(self,
-        instanceName:typing.Optional[str]=None,
+        instanceName:typing.Union[None,str,Path]=None,
+        createNewInstance:bool=False,
+        createInstanceIfMissing:bool=True,
         host:typing.Optional[str]=None,
         port:typing.Union[None,int,str]=None,
         ):
         self._instanceName=instanceName
+        self._instanceInfo:typing.Optional[JsonLike]=None
         if instanceName is not None:
-            instance=self.getInstanceInfo(instanceName)
-            if instance is None:
-                msg=[f'No vs code instance called "{instanceName}" in:']
-                for instance in self.getInstances().values():
-                    msg.append(str(instance))
-                raise IndexError('\n\t'.join(msg))
-            host=instance.get('host',host)
-            port=instance.get('port',port)
+            if not createNewInstance:
+                self._instanceInfo=self.getInstanceInfo(instanceName)
+                if self._instanceInfo is None:
+                    msg=[f'No vs code instance called "{instanceName}" in:']
+                    for instance in self.getInstances().values():
+                        msg.append(str(instance))
+                    raise IndexError('\n\t'.join(msg))
+                else:
+                    createNewInstance=createInstanceIfMissing
+            if createNewInstance:
+                self.createNewInstance(instanceName)
+            host=self._instanceInfo.get('host',host)
+            port=self._instanceInfo.get('port',port)
         if host is None:
             host='localhost'
-        self._host=host
-        if port is None:
-            raise Exception("Unable to assign network port")
-        self._port=int(port)
+        self._instanceInfo['host']=host
+        self._instanceInfo['port']=int(port)
         self._websocket:typing.Optional[websocket.WebSocket]=None
         self.queryApi(False)
+
+    @classmethod
+    def createNewInstance(cls,
+        instanceName:typing.Union[None,str,Path]=None
+        )->JsonLike:
+        """
+        Create a new visual studio code program instance
+
+        :instanceName: aka, the location of the directory or .workspace file
+        """
+        import time
+        import subprocess
+        if instanceName is None:
+            instanceName=""
+        cmd=['code',instanceName]
+        po=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        _,err=po.communicate()
+        err=err.strip()
+        if err:
+            raise Exception(err.decode('utf-8',errors='ignore'))
+        pid=po.pid
+        for _ in range(50):
+            time.sleep(0.10)
+            instances=cls.getInstances()
+            instance=instances.get(pid)
+            if instance is not None:
+                return instance
+        msg="""Unable to find instance we started
+        (is the bridge plugin installed?)"""
+        raise Exception(msg)
 
     @classmethod
     def getInstances(cls)->JsonLike:
@@ -283,11 +330,13 @@ class VsCode:
 
     @classmethod
     def getInstanceInfo(cls,
-        instanceName:str
+        instanceName:typing.Union[str,Path]
         )->typing.Optional[JsonLike]:
         """
         Get a specific vscode instance
         """
+        if isinstance(instanceName,Path):
+            instanceName=str(instanceName)
         for instance in cls.getInstances().values():
             if instance['name']==instanceName:
                 return instance
@@ -336,6 +385,57 @@ class VsCode:
 
     def __del__(self):
         self.closeSocket()
+
+    def kill(self)->None:
+        """
+        If things get out of hand, kill vscode entirely
+        """
+        os.kill(self.pid)
+
+    @property
+    def instanceInfo(self)->JsonLike:
+        """
+        Information about the current instance from the file
+
+        Can raise an exception if the instance was not specified,
+        does not exist, or the process has disappeared.
+        """
+        if self._instanceInfo is None \
+            or not psutil.pid_exists(int(self._instanceInfo['pid'])):
+            raise NoVscodeInstanceException(self._instanceName)
+        return self._instanceInfo
+
+    @property
+    def pid(self)->int:
+        """
+        System process id for this instance
+        of visual studio code
+        """
+        return int(self.instanceInfo['pid'])
+
+    @property
+    def hwnd(self)->str:
+        """
+        Window handle of the vscode instance
+        """
+        hwnd=self.instanceInfo.get('hwnd')
+        if hwnd is None:
+            if os.name=='nt':
+                import win32gui
+                import win32process
+                hwnds=[]
+                pid=self.pid
+                def cb(hwnd,hwnds):
+                    _,windowPid=win32process.GetWindowThreadProcessId(hwnd)
+                    if windowPid==pid:
+                        hwnds.append(hwnd)
+                win32gui.EnumWindows(cb,hwnds)
+                if hwnds:
+                    hwnd=hwnds[0]
+                    self.instanceInfo['hwnd']=hwnd
+            else:
+                raise NotImplementedError()
+        return hwnd
 
     def getCommands(self,
         force:bool=True
