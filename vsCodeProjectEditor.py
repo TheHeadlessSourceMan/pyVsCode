@@ -5,28 +5,27 @@ See also:
 https://code.visualstudio.com/api/references/vscode-api
 """
 import typing
-import os
 from pathlib import Path
 from paths import URLCompatible,FileLocationCompatible,FileLocation
 from codeTools.codeToolsPluginInterface import (
     Ide,Breakpoint,Watchpoint,BreakpointCallback,StackFrame)
-from .pythonBridgeClient import VsCode,NoVscodeInstanceException
+from .pythonBridgeClient import VsCodeBridgeClient,NoVscodeInstanceException
 
 
-class VsCodeProjectEditor(Ide):
+class VsCode(Ide):
     """
     Control instance of Visual Studio Code
-    
+
     See also:
     https://code.visualstudio.com/api/references/vscode-api
     """
     def __init__(self,project:typing.Union[None,str,Path]):
-        self._bridge:typing.Optional[VsCode]=None
+        self._bridge:typing.Optional[VsCodeBridgeClient]=None
         if project is not None:
             self.project=project
 
     @property
-    def bridge(self)->VsCode:
+    def bridge(self)->VsCodeBridgeClient:
         """
         Current instance of the vscode bridge.
 
@@ -52,7 +51,7 @@ class VsCodeProjectEditor(Ide):
         Open a vscode directory or .workspace file
         """
         if self._bridge is None:
-            self._bridge=VsCode(project)
+            self._bridge=VsCodeBridgeClient(project)
         else:
             # TODO: untested, need to look up the api for this
             result=self.bridge.executeApi('open_workspace',project)
@@ -71,19 +70,23 @@ class VsCodeProjectEditor(Ide):
         """
         Read code text from a particular file
         (NOTE: FileLocation is a range!)
+
+        UNTESTED
         """
-        # TODO: untested, need to look up the api for this
-        result=self.bridge.executeApi('read',location)
-        print(result)
+        textEditor=self.bridge.executeApi('openTextDocument',location)
+        selection=textEditor.setSelection(location)
+        print(selection)
+        selection.getText()
 
     def write(self,location:FileLocationCompatible,data:str)->None:
         """
         Write code text to a particular file, AND SAVE.
         (NOTE: FileLocation is a range!)
+
+        UNTESTED
         """
-        # TODO: untested, need to look up the api for this
-        result=self.bridge.executeApi('write',location,data)
-        print(result)
+        textEditor=self.bridge.executeApi('openTextDocument',location)
+        textEditor.insertSnippet(data,location)
 
     def getFiles(self)->typing.Iterable[str]:
         """
@@ -93,6 +96,7 @@ class VsCodeProjectEditor(Ide):
         """
         result=self._bridge.eval('textDocuments')
         print(result)
+        return result
 
     def saveAll(self)->None:
         """
@@ -142,7 +146,8 @@ class VsCodeProjectEditor(Ide):
         debugConfigurationProvider=self.bridge.executeApi(
             'debug.currentDebugConfigurationProvider')
         name=''
-        for debugConfiguration in debugConfigurationProvider['provideDebufConfigurations']():
+        configs=debugConfigurationProvider['provideDebufConfigurations']()
+        for debugConfiguration in configs:
             name=debugConfiguration.name
             if name.lower().find('attach'):
                 break
@@ -153,7 +158,7 @@ class VsCodeProjectEditor(Ide):
         """
         If debugger is running, return the session.
         Otherwise, raises exception.
-        
+
         UNTESTED
         """
         result=self.bridge.executeApi('debug.activeDebugSession')
@@ -267,7 +272,8 @@ class VsCodeProjectEditor(Ide):
 
         UNTESTED
         """
-        result=self.bridge.executeApi('debug.removeBreakpoints',[breakpoint.name])
+        result=self.bridge.executeApi(
+            'debug.removeBreakpoints',[breakpoint.name])
         print(result)
 
     def getWatchpoints(self)->typing.Generator[Watchpoint,None,None]:
@@ -290,30 +296,3 @@ class VsCodeProjectEditor(Ide):
         Remove a watchpoint
         """
         raise NotImplementedError()
-
-    def reshapeWindow(self,
-        x:typing.Optional[int]=None,
-        y:typing.Optional[int]=None,
-        w:typing.Optional[int]=None,
-        h:typing.Optional[int]=None)->None:
-        """
-        Only works on Windows OS currently
-        """
-        if os.name=='nt':
-            import win32gui
-            win32gui.MoveWindow( # type: ignore
-                self.bridge.hwnd,x,y,w,h,None)
-    def moveWindow(self,
-        x:int,
-        y:int)->None:
-        """
-        Only works on Windows OS currently
-        """
-        self.reshapeWindow(x,y)
-    def resizeWindow(self,
-        w:int,
-        h:int)->None:
-        """
-        Only works on Windows OS currently
-        """
-        self.reshapeWindow(None,None,w,h)

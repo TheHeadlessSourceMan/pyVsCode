@@ -14,6 +14,7 @@ import typing
 import os
 import json
 from pathlib import Path
+from codeTools.codeToolsPluginInterface import pidToHwnds
 import psutil
 import websocket # type: ignore
 
@@ -36,7 +37,7 @@ class Remote:
     Base class for something on the remote side
     """
     def __init__(self,
-        vsCode:"VsCode",
+        vsCode:"VsCodeBridgeClient",
         parent:typing.Optional["Remote"],
         name:str):
         """ """
@@ -80,7 +81,7 @@ class RemoteObject(Remote):
     Remote object
     """
     def __init__(self,
-        vsCode:"VsCode",
+        vsCode:"VsCodeBridgeClient",
         parent:typing.Optional["Remote"],
         name:str):
         """ """
@@ -127,7 +128,7 @@ class RemoteValue(Remote):
     Remote value
     """
     def __init__(self,
-        vsCode:"VsCode",
+        vsCode:"VsCodeBridgeClient",
         parent:typing.Optional["Remote"],
         name:str):
         """ """
@@ -156,7 +157,7 @@ class CommandCaller:
     into a proper callable
     """
 
-    def __init__(self,vscode:"VsCode",commandName:str):
+    def __init__(self,vscode:"VsCodeBridgeClient",commandName:str):
         """
         """
         self.vscode=vscode
@@ -177,7 +178,7 @@ class RemoteFunction(Remote):
     Callable remote function
     """
     def __init__(self,
-        vsCode:"VsCode",
+        vsCode:"VsCodeBridgeClient",
         parent:typing.Optional["Remote"],
         name:str,
         parameters:typing.List[str]):
@@ -208,7 +209,7 @@ class RemoteFunction(Remote):
         return f'{indent}def {self.name}({params})'
 
 
-class VsCode:
+class VsCodeBridgeClient:
     """
     Access visual studio code api via websocket
 
@@ -414,27 +415,25 @@ class VsCode:
         return int(self.instanceInfo['pid'])
 
     @property
+    def hwnds(self)->typing.Iterable[str]:
+        """
+        All of the top-level windows associated
+        with this vscode instance
+        """
+        hwnds=pidToHwnds(self.pid)
+        return hwnds
+
+    @property
     def hwnd(self)->str:
         """
         Window handle of the vscode instance
         """
         hwnd=self.instanceInfo.get('hwnd')
         if hwnd is None:
-            if os.name=='nt':
-                import win32gui
-                import win32process
-                hwnds=[]
-                pid=self.pid
-                def cb(hwnd,hwnds):
-                    _,windowPid=win32process.GetWindowThreadProcessId(hwnd)
-                    if windowPid==pid:
-                        hwnds.append(hwnd)
-                win32gui.EnumWindows(cb,hwnds)
-                if hwnds:
-                    hwnd=hwnds[0]
-                    self.instanceInfo['hwnd']=hwnd
-            else:
-                raise NotImplementedError()
+            hwnds=self.hwnds
+            if hwnds:
+                hwnd=hwnds[0]
+                self.instanceInfo['hwnd']=hwnd
         return hwnd
 
     def getCommands(self,
