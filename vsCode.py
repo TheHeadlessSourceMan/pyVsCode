@@ -12,14 +12,14 @@ from codeTools.codeToolsPluginInterface import (
 from .pythonBridgeClient import VsCodeBridgeClient,NoVscodeInstanceException
 
 
-class VsCode(Ide):
+class VsCodeIde(Ide):
     """
     Control instance of Visual Studio Code
 
     See also:
     https://code.visualstudio.com/api/references/vscode-api
     """
-    def __init__(self,project:typing.Union[None,str,Path]):
+    def __init__(self,project:typing.Union[None,str,Path]=None):
         self._bridge:typing.Optional[VsCodeBridgeClient]=None
         if project is not None:
             self.project=project
@@ -296,3 +296,4 @@ class VsCode(Ide):
         Remove a watchpoint
         """
         raise NotImplementedError()
+VsCode=VsCodeIde

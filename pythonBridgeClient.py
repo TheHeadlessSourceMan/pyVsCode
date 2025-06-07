@@ -226,13 +226,17 @@ class VsCodeBridgeClient:
         host:typing.Optional[str]=None,
         port:typing.Union[None,int,str]=None,
         ):
-        self._instanceName=instanceName
+        if instanceName is not None:
+            if isinstance(instanceName,str):
+                instanceName=Path(os.path.expandvars(instanceName))
+            instanceName=instanceName.absolute()
+        self._instanceName:typing.Optional[Path]=instanceName
         self._instanceInfo:typing.Optional[JsonLike]=None
         if instanceName is not None:
             if not createNewInstance:
                 self._instanceInfo=self.getInstanceInfo(instanceName)
                 if self._instanceInfo is None:
-                    msg=[f'No vs code instance called "{instanceName}" in:']
+                    msg=[f'No vs code instance named "{instanceName}" in:']
                     for instance in self.getInstances().values():
                         msg.append(str(instance))
                     raise IndexError('\n\t'.join(msg))
@@ -297,7 +301,10 @@ class VsCodeBridgeClient:
         ]
         """
         filename=Path().home()/'.vscode_instances.json'
-        jsonData=filename.read_text('utf-8',errors='ignore')
+        try:
+            jsonData=filename.read_text('utf-8',errors='ignore')
+        except FileNotFoundError:
+            return {}
         instances:typing.Dict[str,JsonLike]=json.loads(jsonData)
         # check which instances are a valid process id
         validInstances:JsonLike={}
