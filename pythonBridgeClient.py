@@ -14,7 +14,7 @@ import typing
 import os
 import json
 from pathlib import Path
-from codeTools.codeToolsPluginInterface import pidToHwnds
+from k_runner import pidToHwnds
 import psutil
 import websocket # type: ignore
 
@@ -438,9 +438,10 @@ class VsCodeBridgeClient:
         hwnd=self.instanceInfo.get('hwnd')
         if hwnd is None:
             hwnds=self.hwnds
-            if hwnds:
-                hwnd=hwnds[0]
+            for hwnd in hwnds:
+                # just take the first one
                 self.instanceInfo['hwnd']=hwnd
+                break
         return hwnd
 
     def getCommands(self,
