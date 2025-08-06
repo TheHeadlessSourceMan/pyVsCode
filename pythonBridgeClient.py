@@ -14,7 +14,7 @@ import typing
 import os
 import json
 from pathlib import Path
-from k_runner import pidToHwnds
+from k_runner import pidToHwnds,WindowHandleType
 import psutil
 import websocket # type: ignore
 
@@ -26,7 +26,7 @@ class NoVscodeInstanceException(Exception):
     Exception for when we want to do something on a vscode instance
     but there is not one attached.
     """
-    def __init__(self,instanceName:typing.Optional[str]=None):
+    def __init__(self,instanceName:typing.Union[None,Path,str]=None):
         msg='No VsCode instance connected'
         if instanceName is not None and instanceName:
             msg=f'No VsCode instance named "{instanceName}" connected'
@@ -244,12 +244,17 @@ class VsCodeBridgeClient:
                     createNewInstance=createInstanceIfMissing
             if createNewInstance:
                 self.createNewInstance(instanceName)
-            host=self._instanceInfo.get('host',host)
-            port=self._instanceInfo.get('port',port)
+            if self._instanceInfo is not None:
+                host=self._instanceInfo.get('host',host)
+                port=self._instanceInfo.get('port',port)
         if host is None:
             host='localhost'
+        if self._instanceInfo is None:
+            self._instanceInfo={}
         self._instanceInfo['host']=host
-        self._instanceInfo['port']=int(port)
+        if isinstance(port,str):
+            port=int(port)
+        self._instanceInfo['port']=port
         self._websocket:typing.Optional[websocket.WebSocket]=None
         self.queryApi(False)
 
@@ -276,7 +281,7 @@ class VsCodeBridgeClient:
         for _ in range(50):
             time.sleep(0.10)
             instances=cls.getInstances()
-            instance=instances.get(pid)
+            instance=instances.get(str(pid))
             if instance is not None:
                 return instance
         msg="""Unable to find instance we started
@@ -379,7 +384,7 @@ class VsCodeBridgeClient:
         """
         if self._instanceName is None:
             return ''
-        return self._instanceName
+        return str(self._instanceName)
     @instanceName.setter
     def instanceName(self,instanceName:typing.Optional[str]):
         if instanceName is not None:
@@ -389,6 +394,8 @@ class VsCodeBridgeClient:
                     f'No vs code instance called "{instanceName}"')
             self.host=instance.get('host','localhost')
             self.port=instance.get('port',8180)
+        if instanceName is not None:
+            instanceName=Path(instanceName)
         self._instanceName=instanceName
 
     def __del__(self):
@@ -398,7 +405,7 @@ class VsCodeBridgeClient:
         """
         If things get out of hand, kill vscode entirely
         """
-        os.kill(self.pid)
+        os.kill(self.pid,-9)
 
     @property
     def instanceInfo(self)->JsonLike:
@@ -422,7 +429,7 @@ class VsCodeBridgeClient:
         return int(self.instanceInfo['pid'])
 
     @property
-    def hwnds(self)->typing.Iterable[str]:
+    def hwnds(self)->typing.Iterable[WindowHandleType]:
         """
         All of the top-level windows associated
         with this vscode instance
@@ -431,7 +438,7 @@ class VsCodeBridgeClient:
         return hwnds
 
     @property
-    def hwnd(self)->str:
+    def hwnd(self)->typing.Optional[WindowHandleType]:
         """
         Window handle of the vscode instance
         """
